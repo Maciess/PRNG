@@ -1,0 +1,113 @@
+---
+title: "PRNG - Statistical testing"
+author: "Maciej Szczutko"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(reticulate)
+
+py_config()
+```
+
+# Statistical test description
+
+
+## Testing binary expansion of constans 
+
+In this section we perform frequency monobit test for number $\pi, e, \sqrt{2}$. More formally we will use their binary expansion as the random bit sequence. We use provided files with binary expansions. For inference we will follow instruction from official **NIST** report. 
+
+Some important notes from report about most basic test. 
+
+
+>2.1.5 Decision Rule (at the $1 \%$ Level)
+>
+> If the computed $P$-value is $<0.01$, then conclude that the sequence is non-random. Otherwise, conclude that the sequence is random.
+
+>2.1.7 Input Size Recommendation
+>
+> It is recommended that each sequence to be tested consist of a minimum of 100 bits (i.e., $n \geq 100$).
+
+```{python import-python-modules}
+import pickle
+```
+
+
+```{python test}
+import numpy as np
+import math
+from scipy.stats import norm
+
+
+def frequency_monobit_test(bits):
+#   bits should be already mapped into [-1,1]
+    n = len(bits)
+    S = np.sum(bits)
+    S_obs = abs(S) / math.sqrt(n)
+    p_value = 2 * (1 - norm.cdf(S_obs))
+    return p_value
+```
+
+
+```{python read-data-e}
+
+with open('../data/binary_expansion_e.pkl', 'rb') as f:
+    data = pickle.load(f)
+
+numbers = data["numbers"]
+sequence_e = 2 * numbers - 1 # map into -1 , 1 
+```
+
+
+```{python read-data-pi}
+
+with open('../data/binary_expansion_pi.pkl', 'rb') as f:
+    data = pickle.load(f)
+
+numbers = data["numbers"]
+sequence_pi = (2 * numbers - 1) # map into -1 , 1 
+```
+
+
+```{python read-data-sqrt2}
+
+with open('../data/binary_expansion_sqrt2.pkl', 'rb') as f:
+    data = pickle.load(f)
+
+numbers = data["numbers"]
+sequence_sqrt2 = 2 * numbers - 1 # map into -1 , 1 
+```
+
+```{python calculate-pval-for-constants}
+
+p_val =	{
+  "pi": frequency_monobit_test(sequence_pi),
+  "e": frequency_monobit_test(sequence_e),
+  "sqrt2": frequency_monobit_test(sequence_sqrt2)
+}
+
+length =	{
+  "pi": len(sequence_pi),
+  "e": len(sequence_e),
+  "sqrt2": len(sequence_sqrt2)
+}
+
+```
+
+
+
+| Constant name  |  $p_{value}$ | Input Size|
+|---|---|---|
+| $\pi$  |`r py$p_val["pi"]`| `r py$length["pi"]` |
+| $e$  |`r py$p_val["e"]`| `r py$length["e"]`|
+| $\sqrt{2}$  |`r py$p_val["sqrt2"]`|`r py$length["sqrt2"]` | 
+
+The size of out data is aligned  with **NIST** recommendations. Authors recommend $0.01$ as significance level for PRNG testing. From above table we conclude that binary expansion of each mentioned constants could be considered as random bit sequence. 
+
+
+
+
+
+
