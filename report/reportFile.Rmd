@@ -8,7 +8,6 @@ output: pdf_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 library(reticulate)
-
 py_config()
 ```
 
@@ -32,6 +31,9 @@ Some important notes from report about most basic test.
 
 ```{python import-python-modules}
 import pickle
+
+byRow = 1
+byCol = 0
 ```
 
 
@@ -52,7 +54,6 @@ def frequency_monobit_test(bits):
 
 
 ```{python read-data-e}
-
 with open('../data/binary_expansion_e.pkl', 'rb') as f:
     data = pickle.load(f)
 
@@ -106,6 +107,35 @@ length =	{
 
 The size of out data is aligned  with **NIST** recommendations. Authors recommend $0.01$ as significance level for PRNG testing. From above table we conclude that binary expansion of each mentioned constants could be considered as random bit sequence. 
 
+
+## Second level testing for bits
+
+Because the size of sample are quite big we can try another approach. We split the sequence into a lot of smaller samples. We use the smallest recommended $n=100$ for this test. The split method will be very straightforward. We simply take first $100$ bits for first sample, another $100$ for second sample and so on.
+
+```{python split-into-many-samples}
+
+default_sample_size = 100
+
+def trim_to_multiple_of_n (array, n = default_sample_size):
+    sample_number = int(len(array) / n)
+    return (array[:(sample_number * n)], sample_number)
+  
+sequence_sqrt2_samples, sample_number = trim_to_multiple_of_n(sequence_sqrt2)
+sequence_sqrt2_samples = sequence_sqrt2_samples.reshape((sample_number, default_sample_size))
+
+p_values_sequence_sqrt2_samples = np.apply_along_axis(frequency_monobit_test, byRow, sequence_sqrt2_samples)
+```
+
+```{python plots}
+import matplotlib.pyplot as plt
+
+plt.hist(p_values_sequence_sqrt2_samples, bins = "auto")
+plt.title("P value distribution for $\sqrt{2}$")
+plt.show()
+```
+
+
+We can take a look a histogram of p_values. TODO: the same plot for others. 
 
 
 
