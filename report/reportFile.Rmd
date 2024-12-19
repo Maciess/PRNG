@@ -6,12 +6,35 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, message = F, warning = F)
 library(reticulate)
-py_config()
 ```
 
 # Statistical test description
+
+
+Common part
+Hypothesis definiton.
+
+## $\chi^2$ test
+
+## KS-test 
+
+This test is based on empircal 
+
+## Serial test 
+
+
+```{python serial-test-definiton}
+
+
+
+
+
+def serial_test(sample, m, l):
+    ## create cubes 
+    
+```
 
 
 ## Testing binary expansion of constans 
@@ -31,6 +54,10 @@ Some important notes from report about most basic test.
 
 ```{python import-python-modules}
 import pickle
+import matplotlib.pyplot as plt
+import numpy as np
+import math
+from scipy.stats import norm
 
 byRow = 1
 byCol = 0
@@ -38,11 +65,6 @@ byCol = 0
 
 
 ```{python test}
-import numpy as np
-import math
-from scipy.stats import norm
-
-
 def frequency_monobit_test(bits):
 #   bits should be already mapped into [-1,1]
     n = len(bits)
@@ -113,29 +135,241 @@ The size of out data is aligned  with **NIST** recommendations. Authors recommen
 Because the size of sample are quite big we can try another approach. We split the sequence into a lot of smaller samples. We use the smallest recommended $n=100$ for this test. The split method will be very straightforward. We simply take first $100$ bits for first sample, another $100$ for second sample and so on.
 
 ```{python split-into-many-samples}
-
 default_sample_size = 100
 
-def trim_to_multiple_of_n (array, n = default_sample_size):
+def trim_to_multiple_of_n (array, n):
     sample_number = int(len(array) / n)
     return (array[:(sample_number * n)], sample_number)
-  
-sequence_sqrt2_samples, sample_number = trim_to_multiple_of_n(sequence_sqrt2)
-sequence_sqrt2_samples = sequence_sqrt2_samples.reshape((sample_number, default_sample_size))
 
+def make_matrix_with_samples(array, n = default_sample_size):
+  seq, sample_number = trim_to_multiple_of_n(array, n)
+  seq = seq.reshape((sample_number, n))
+  return seq
+  
+
+sequence_sqrt2_samples = make_matrix_with_samples(sequence_sqrt2)
 p_values_sequence_sqrt2_samples = np.apply_along_axis(frequency_monobit_test, byRow, sequence_sqrt2_samples)
+
+sequence_e_samples = make_matrix_with_samples(sequence_e)
+p_values_sequence_e_samples = np.apply_along_axis(frequency_monobit_test, byRow, sequence_e_samples)
+
+sequence_pi_samples = make_matrix_with_samples(sequence_pi)
+p_values_sequence_pi_samples = np.apply_along_axis(frequency_monobit_test, byRow, sequence_pi_samples)
 ```
 
-```{python plots}
-import matplotlib.pyplot as plt
 
-plt.hist(p_values_sequence_sqrt2_samples, bins = "auto")
-plt.title("P value distribution for $\sqrt{2}$")
+
+```{python plot-sqrt2}
+
+plt.clf()
+x = plt.hist(p_values_sequence_sqrt2_samples, bins = "auto")
+x = plt.title("P value distribution for p_values $\sqrt{2}$")
+plt.show()
+```
+
+```{python plot-e}
+
+plt.clf()
+dummy = plt.hist(p_values_sequence_e_samples, bins = "auto")
+dummy = plt.title("P value distribution for p_values $e$")
 plt.show()
 ```
 
 
-We can take a look a histogram of p_values. TODO: the same plot for others. 
+```{python plot-pi}
+plt.clf()
+dummy =  plt.hist(p_values_sequence_pi_samples, bins = "auto")
+dummy = plt.title("P value distribution for p_values $\pi$")
+plt.show()
+```
+
+
+We can take a look at the histogram of p values. For me it doesn't look like uniformly distribute. 
+
+```{python fraction-that-pass-frequency}
+
+def calculte_fraction(p_values, significant_level = 0.01):
+    return np.count_nonzero(p_values > significant_level) / len(p_values)
+    
+fraction_pi  = calculte_fraction(p_values_sequence_pi_samples)
+fraction_e  = calculte_fraction(p_values_sequence_e_samples)
+fraction_sqrt2  = calculte_fraction(p_values_sequence_sqrt2_samples)
+```
+
+In below table we can see what fraction of samples  pass the test. 
+
+| Constant name  |  Fraction that pass |
+|---|---|---|
+| $\pi$  |`r py$fraction_pi`|
+| $e$  |`r py$fraction_e`| 
+| $\sqrt{2}$  |`r py$fraction_sqrt2`|
+
+
+## RC(32)
+
+The RC(32) random generator is a computational tool designed to produce sequences of random or pseudorandom numbers within a defined range. It typically employs algorithms optimized for speed and uniform distribution, making it suitable for simulations, cryptography, and data sampling. With its 32-bit architecture, the generator can provide high precision and a large range of outputs, ensuring versatility for various applications. Modern implementations often focus on enhancing randomness quality, reducing predictability, and adhering to statistical randomness tests like DIEHARD or TestU01. The RC(32) is favored in environments where reliable randomness is critical, such as in secure key generation or randomized algorithms. Additionally, its efficiency ensures minimal computational overhead, making it well-suited for embedded systems and high-performance computing tasks.
+
+I provide some naive python implementation in *PRGA* and *KSA* modules. I will use my birthday (from year, month and day) as key (mod 32). So the key is [15, 8, 29].
+
+```{python import-RC-module}
+from PRGA import PRGA
+from KSA import Keys, KSA
+import time
+
+```
+
+```{python generate-seq-prga}
+sample_size  = int(1e6)
+
+keys = Keys(np.array([15, 8, 29]))
+ksa = KSA(m=32)
+ksa.schedule(keys)
+prga = PRGA(ksa)
+start = time.time()
+sample_rc = prga.get_random(sample_size)
+end = time.time()
+print("Elapsed generation time of sample size = %d is %ss" % (sample_size, end - start))
+```
+We can check how the sequence begin `r py$sample_rc[0:50]`...
+
+```{python plot-from-rc, include = F}
+
+plt.clf()
+dummy = plt.hist(sample_rc, bins = list(range(32)))
+dummy = plt.title("P value distribution for p_values $e$")
+plt.show()
+
+```
+
+
+
+```{python simple-generators}
+#TODO why not working with dedicated module
+
+def lcg(m, a, c, x):
+    return (a * x + c) % m
+
+
+def get_n_lcg(m, a, c, init, size):
+    result = np.empty(size, dtype=np.uint32)
+    assert size >= 1, "Incorrect size"
+    result[0] = lcg(m, a, c, init)
+    for i in range(1, size):
+        result[i] = lcg(m, a, c, result[i - 1])
+    return result
+  
+def generalized_lcg(m, a, c, x):
+    return (np.sum(a * x) + c) % m
+
+
+def get_n_glcg(m, a, c, init, size):
+    assert size >= 1, "Incorrect size"
+    depth = len(init)
+    result = np.empty(size, dtype=np.uint32)
+    result = np.concatenate((init, result))
+    for i in range(depth, size+depth):
+        result[i] = generalized_lcg(m, a, c, result[i-depth:i])
+    return result[-size:]
+
+
+def excell_gen(x):
+    return (0.9821 * x + 0.211327) % 1
+  
+
+def generate_excell_sample(seed, size):
+    sample = np.zeros(size)
+    current_value = seed
+    for i in range(size):
+      current_value = excell_gen(current_value)
+      sample[i] = current_value
+    return sample
+```
+
+## LCG($13,1,5$) used seed = $42$
+
+```{python genenererate-seq-lcg-13}
+
+seed = 42
+
+simple_lcg_sample = get_n_lcg(13, 1, 5, seed, size=int(1e6))
+
+
+
+```
+
+
+We can check how the sequence begin `r py$simple_lcg_sample[0:50]`...
+
+For this example we can observe period of generator due relative small parameters. TODO determine longest possible cycle
+
+
+
+## LCG($2^{10},3,7$)  used seed = $42$
+
+```{python genenererate-seq-lcg-1024}
+
+seed = 42
+
+lcg_sample = get_n_lcg(2**10, 3, 7, seed, size=int(1e6))
+
+```
+
+We can check how the sequence begin `r py$lcg_sample[0:50]`...
+
+Comparing with previous example we can't determine the period by manual inspection now.
+
+
+## GLCG($2^{10},{3,7, 68}$)
+
+```{python g-lcg-seq}
+
+a = np.array([3, 7, 68])
+seed = np.array([1,1,1])
+
+sample_glcg = get_n_glcg(2 ** 10, a, 0, seed, size = int(1e6))
+
+```
+
+We can check how the sequence begin `r py$sample_glcg[0:50]`...
+
+## Excell 
+
+This PRNG is defined as 
+
+$$
+u_i=\left(0.9821 u_{i-1}+0.211327\right) \quad \bmod 1
+$$
+Actually is the ordinary $LCG(0.9821, 0.211327, 1)$.  Probably this was used in Excell program till 2003 version. 
+
+```{python excell}
+
+seed = 0.5
+sample_size = int(100)
+excell_sample = generate_excell_sample(seed, sample_size)
+excell_sample2 = generate_excell_sample(2, sample_size)
+
+```
+
+```{python plot-trajectory}
+
+trajectory  = excell_sample
+
+plt.clf()
+plt.figure(figsize=(10, 6))
+plt.plot(range(sample_size), trajectory, marker='o', linestyle='-', label='Excell_gen Sequence', color = "red")
+plt.plot(range(sample_size), excell_sample2, marker='o', linestyle='-', label='Excell_gen Sequence', color = "blue")
+plt.title(f'Trajectory of excell_gen PRNG (Seed={seed})', fontsize=14)
+plt.xlabel('Iteration', fontsize=12)
+plt.ylabel('Generated Value', fontsize=12)
+plt.ylim(0, 1)
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.legend(fontsize=12)
+plt.show()
+
+```
+
+
+Plotting the trajectory of beginning give us overview of quality of such generator. Maybe it simple and fast but not safe. We can observe pattern easily for difference seeds. 
 
 
 

@@ -1,10 +1,8 @@
 import numpy as np
-from numba import jit
 
 def lcg(m, a, c, x):
     return (a * x + c) % m
 
-@jit(nopython=True)
 def get_n_lcg(m, a, c, init, size):
     result = np.empty(size, dtype=np.uint32)
     assert size >= 1, "Incorrect size"
