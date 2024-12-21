@@ -13,31 +13,72 @@ library(reticulate)
 # Statistical test description
 
 
-Common part
-Hypothesis definiton.
+In this short report I would like to perform some statistical test to check whether the sequence is random or not. In general the common part for each test is null hypothesis.
+
+$H_0$ : The sequence is random
+$H_A$ : The sequence is not random.
+
+In most cases the interfere will be based on p-value. It's convienient to perform the 2nd level testing later. 
 
 ## $\chi^2$ test
 
+Here we divide some interval into buckets and check distribution within bucket. Usually we will use equally length buckets. The test statistic is 
+
+$$ \hat{\chi}^2=\sum_{i=1}^k \frac{\left(Y_i-n p_i\right)^2}{n p_i} .$$
+
+* Test parameters
+  + $k$ - number of categories/buckets
+  + $p_i$ - probability that value belong to $i$-th bucket ($i=1,2,\ldots, k$)
+* Statistic params explanation
+  + $n$ - sample size
+  + $Y_i$ - number of elements in sample belong to $i$-th bucket
+
+Implementation ...
+
+## Frequency monobit test
+
+The test is designed for generator yielding binary sequences. Suppose we have a bit sequence $b_1, b_2, \ldots, b_i \in\{0.1\}$. We convert the sequence to $x_1, x_2, \ldots$ with values $\{-1,1\}$ via $x_i=2 b_i-1$. Test statistic is
+
+$$
+s_n(o b s)=\frac{1}{\sqrt{n}} \sum_{i=1}^n x_i .
+$$
+Under $H_0$ test statistic is approximetly $N(0,1)$ by CLT.
+
 ## KS-test 
 
-This test is based on empircal 
+This test is based on empircal cdf function and described in project document. For KS test I will use the implementation from **scipy** module.
 
-## Serial test 
+[scipy.kstest](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.kstest.html)
 
+## Serial test ($m,L$)
 
-```{python serial-test-definiton}
+Serial test is quite easy to understand test that incorporate relation between sequence's elements. Roughly speaking we split vector into $r$ equally length vectors  with dimension $m$ and check how they are distributed within $[0,1]^m$ hybercube. We divide the hybercube into $L^m$ smaller cubes (see picture below). Assuming that sequence is uniformly distributed we expect that the distribution within cubes should be also uniform. It multidimensional equivalent for ordinary $\chi^2$ test (if $m \geq 2$). 
 
+The implementation is **serial_test** module.
 
-
-
-
-def serial_test(sample, m, l):
-    ## create cubes 
-    
-```
+![](zgadzaSieUkradlem.png){width=50%}
 
 
-## Testing binary expansion of constans 
+
+
+### Test parameters and statistic description
+
+* Test parameters
+  + $m$ - dimension of hypercube
+  + $L$ - "number of bucket for each dimension" control the granularity
+* Statistic paramas explanation
+  + $r$ - number of vectors (dimension $m$) obtained from sample
+  + $k = L^m$ - number of sub hypercube, granularity (should be significant lower than $r$)
+  + $O_i$ - vector count in each $i$-th subhypercube
+
+$$
+X^2(obs)=\sum_{i=1}^k \frac{\left(O_i-r / k\right)^2}{r / k} .
+$$
+Under $H_0$ statistic has $\chi^2_{k-1}$ distribution.
+
+
+
+# Testing binary expansion of constans 
 
 In this section we perform frequency monobit test for number $\pi, e, \sqrt{2}$. More formally we will use their binary expansion as the random bit sequence. We use provided files with binary expansions. For inference we will follow instruction from official **NIST** report. 
 
@@ -205,6 +246,43 @@ In below table we can see what fraction of samples  pass the test.
 | $\sqrt{2}$  |`r py$fraction_sqrt2`|
 
 
+# Generator description
+
+First we give some basic idea of generators.
+
+
+## Linear congurent 
+
+The most basic one using linear dependence as function of previous element.
+
+$$
+x_{n+1}=\left(a x_n+c\right) \quad \bmod M .
+$$
+
+## Generalized linear congurent
+
+Natural extension on above. Now the output is generated based on last $k$ elements in sequence. Note that the seed is now $k$ element sequence instead of single number.
+
+$$
+x_n=\left(a_1 x_{n-1}+a_2 x_{n-2}+\ldots+a_k x_{n-k}+c\right) \quad \bmod M .
+$$
+
+## Excell
+
+Weird one. Probably used in earlier MS Office implementation (but hard to find some information). This is LCG  with non-integeer coefficients. Yielding number from $[0,1]$.
+
+
+$$
+u_i=\left(0.9821 u_{i-1}+0.211327\right) \quad \bmod 1
+$$
+
+## MT19937
+
+Implementation from numpy module.
+
+To do. Add description.
+
+
 ## RC(32)
 
 The RC(32) random generator is a computational tool designed to produce sequences of random or pseudorandom numbers within a defined range. It typically employs algorithms optimized for speed and uniform distribution, making it suitable for simulations, cryptography, and data sampling. With its 32-bit architecture, the generator can provide high precision and a large range of outputs, ensuring versatility for various applications. Modern implementations often focus on enhancing randomness quality, reducing predictability, and adhering to statistical randomness tests like DIEHARD or TestU01. The RC(32) is favored in environments where reliable randomness is critical, such as in secure key generation or randomized algorithms. Additionally, its efficiency ensures minimal computational overhead, making it well-suited for embedded systems and high-performance computing tasks.
@@ -298,10 +376,9 @@ simple_lcg_sample = get_n_lcg(13, 1, 5, seed, size=int(1e6))
 ```
 
 
-We can check how the sequence begin `r py$simple_lcg_sample[0:50]`...
+We can check how the sequence begin `r py$simple_lcg_sample[0:26]`...
 
-For this example we can observe period of generator due relative small parameters. TODO determine longest possible cycle
-
+For this example we can observe period of generator due relative small parameter $M$. The period can't be greater than $M$, so here just by looking on first 26 elements we can see the how the sequence repeat. 
 
 
 ## LCG($2^{10},3,7$)  used seed = $42$
@@ -318,6 +395,23 @@ We can check how the sequence begin `r py$lcg_sample[0:50]`...
 
 Comparing with previous example we can't determine the period by manual inspection now.
 
+```{python plot-path-for-lcg}
+trajectory = lcg_sample[0:50]
+sample_size = len(trajectory)
+
+plt.clf()
+plt.figure(figsize=(10, 6))
+plt.plot(range(sample_size), trajectory, marker='o', linestyle='-', label='Sequence with seed=42', color = "red")
+plt.title(f'Trajectory of LCG($2^{10}, 3, 7$) with seed = 42) ', fontsize=14)
+plt.xlabel('Iteration', fontsize=12)
+plt.ylabel('Generated Value', fontsize=12)
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.legend(fontsize=12)
+plt.show()
+
+```
+
+
 
 ## GLCG($2^{10},{3,7, 68}$)
 
@@ -330,16 +424,27 @@ sample_glcg = get_n_glcg(2 ** 10, a, 0, seed, size = int(1e6))
 
 ```
 
-We can check how the sequence begin `r py$sample_glcg[0:50]`...
+We can check how the sequence begin `r py$sample_glcg[0:50]`.
+
+Due complexity of PRNG and relative large $M$ we can't see the pattern now. Even graph inspection won't help.
+
+```{python plot-path-for-glcg}
+trajectory = sample_glcg[0:100]
+sample_size = len(trajectory)
+
+plt.clf()
+plt.figure(figsize=(10, 6))
+plt.plot(range(sample_size), trajectory, marker='.', linestyle='--', linewidth = 0.5 ,label='Sequence with seed=42', color = "red")
+plt.title(f'Trajectory of GLCG($2^{10}, {3,7, 68})$ with seed = 42) ', fontsize=14)
+plt.xlabel('Iteration', fontsize=12)
+plt.ylabel('Generated Value', fontsize=12)
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.legend(fontsize=12)
+plt.show()
+```
 
 ## Excell 
 
-This PRNG is defined as 
-
-$$
-u_i=\left(0.9821 u_{i-1}+0.211327\right) \quad \bmod 1
-$$
-Actually is the ordinary $LCG(0.9821, 0.211327, 1)$.  Probably this was used in Excell program till 2003 version. 
 
 ```{python excell}
 
@@ -356,9 +461,9 @@ trajectory  = excell_sample
 
 plt.clf()
 plt.figure(figsize=(10, 6))
-plt.plot(range(sample_size), trajectory, marker='o', linestyle='-', label='Excell_gen Sequence', color = "red")
-plt.plot(range(sample_size), excell_sample2, marker='o', linestyle='-', label='Excell_gen Sequence', color = "blue")
-plt.title(f'Trajectory of excell_gen PRNG (Seed={seed})', fontsize=14)
+plt.plot(range(sample_size), trajectory, marker='o', linestyle='-', label='Sequence with seed=0.5', color = "red")
+plt.plot(range(sample_size), excell_sample2, marker='o', linestyle='-', label='Sequence with seed=2', color = "blue")
+plt.title(f'Trajectory of excell_gen PRNG', fontsize=14)
 plt.xlabel('Iteration', fontsize=12)
 plt.ylabel('Generated Value', fontsize=12)
 plt.ylim(0, 1)
@@ -370,6 +475,9 @@ plt.show()
 
 
 Plotting the trajectory of beginning give us overview of quality of such generator. Maybe it simple and fast but not safe. We can observe pattern easily for difference seeds. 
+
+
+
 
 
 
