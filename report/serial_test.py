@@ -44,7 +44,7 @@ def serial_test(sample, m, l):
     r = len(sample_divided)
     k = l ** m
     assert k == len(cube_collection), "Incorrect cube collection size"
-    cube_counts = np.zeros(k, dtype=np.uint16)
+    cube_counts = np.zeros(k, dtype=np.uint32)
     for m_dim_vector in sample_divided:  # arrow code :(
         for cube_index, cube in enumerate(cube_collection):
             is_in_cube = is_within_hypercube(m_dim_vector, cube)

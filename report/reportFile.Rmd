@@ -294,14 +294,13 @@ $$
 
 ## MT19937
 
-Implementation from numpy module.
-
-To do. Add description.
+Mersenne Twister, developed by Makoto Matsumoto and Takuji Nishimura in 1997, is a highly popular pseudorandom number generator (PRNG). It is renowned for its efficiency, exceptionally long period, and straightforward implementation. Its name derives from its period length, which is a Mersenne prime: $2^{19937}-1$. This immense period makes it ideal for generating large sequences of random numbers, making it suitable for applications like simulations, cryptography, and statistical modeling.
+I think is quite frequently used PRNG and due the performance can be used as default one. For example its included in in STL in C++.
 
 
 ## RC(32)
 
-The RC(32) random generator is a computational tool designed to produce sequences of random or pseudorandom numbers within a defined range. It typically employs algorithms optimized for speed and uniform distribution, making it suitable for simulations, cryptography, and data sampling. With its 32-bit architecture, the generator can provide high precision and a large range of outputs, ensuring versatility for various applications. Modern implementations often focus on enhancing randomness quality, reducing predictability, and adhering to statistical randomness tests like DIEHARD or TestU01. The RC(32) is favored in environments where reliable randomness is critical, such as in secure key generation or randomized algorithms. Additionally, its efficiency ensures minimal computational overhead, making it well-suited for embedded systems and high-performance computing tasks.
+The RC(32) random generator is a computational tool designed to produce sequences of random or pseudo random numbers within a defined range. It have slightly different idea that previous one. It use "random permutation" to produce another sequence element. The new element is yield during permutation update.
 
 I provide some naive python implementation in *PRGA* and *KSA* modules. I will use my birthday (from year, month and day) as key (mod 32). So the key is [15, 8, 29].
 
@@ -326,19 +325,50 @@ print("Elapsed generation time of sample size = %d is %ss" % (sample_size, end -
 ```
 We can check how the sequence begin `r py$sample_rc[0:50]`...
 
-```{python plot-from-rc, include = F}
+
+
+```{python plot-path-for-RC4}
+
+trajectory = sample_rc[0:50]
+sample_size = len(trajectory)
 
 plt.clf()
-dummy = plt.hist(sample_rc, bins = list(range(32)))
-dummy = plt.title("P value distribution for p_values $e$")
+plt.figure(figsize=(10, 6))
+plt.plot(range(sample_size), trajectory, marker='o', linestyle='-', label='Sequence with seed=42', color = "red")
+plt.title(f'Trajectory of RC4', fontsize=14)
+plt.xlabel('Iteration', fontsize=12)
+plt.ylabel('Generated Value', fontsize=12)
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.legend(fontsize=12)
 plt.show()
 
 ```
 
 
+```{python rc4-test}
+from scipy import stats
+
+sample_rc_scaled =  sample_rc / 32 # map into [0,1]
+
+partition  = np.linspace(0,1,6)[1:-1] ## s=5
+
+
+stat, pvalue = chi_test.chi_square_test(sample_rc_scaled , partition)
+result = stats.kstest(sample_rc_scaled , stats.uniform.cdf)
+p_ks, ks_stat = result.pvalue, result.statistic
+```
+
+
+| Test name  |  $p_{value}$ |
+|---|---|
+| $\chi^2$  with $5$ buckets |`r py$pvalue`|
+| $KS-test$  |`r py$p_ks`| 
+
+
+Both rejected. We conclude that sequence is non random.
+
 
 ```{python simple-generators}
-#TODO why not working with dedicated module
 
 def lcg(m, a, c, x):
     return (a * x + c) % m
@@ -387,12 +417,36 @@ seed = 42
 
 simple_lcg_sample = get_n_lcg(13, 1, 5, seed, size=int(1e6))
 
+
+print("Generete LCG sample with seed %d and size %d" % (seed, len(simple_lcg_sample)))
 ```
 
 
 We can check how the sequence begin `r py$simple_lcg_sample[0:26]`...
 
 For this example we can observe period of generator due relative small parameter $M$. The period can't be greater than $M$, so here just by looking on first 26 elements we can see the how the sequence repeat. 
+
+I will map the output into $(0,1)$ for convenience.
+
+```{python evalute-test-for-simple-lcg}
+from scipy import stats
+
+simple_lcg_sample_01 = simple_lcg_sample/13 ## map into [0,1] with /M
+partition  = np.linspace(0,1,13)[1:-1]
+
+
+stat, pvalue = chi_test.chi_square_test(simple_lcg_sample_01, partition)
+result_ks = stats.kstest(simple_lcg_sample_01, stats.uniform.cdf).pvalue
+
+```
+
+
+| Test name  |  $p_{value}$ |
+|---|---|
+| $\chi^2$  with $13$ buckets |`r py$pvalue`|
+| $KS-test$  |`r py$result_ks`| 
+
+There is no point to run much complex test like the serial test if the test can not pass the 2 above. Same for 2nd testing level (should be additional layer of verification not mandatory point of testing).
 
 
 ## LCG($2^{10},3,7$)  used seed = $42$
@@ -402,6 +456,8 @@ For this example we can observe period of generator due relative small parameter
 seed = 42
 
 lcg_sample = get_n_lcg(2**10, 3, 7, seed, size=int(1e6))
+
+print("Generete LCG sample with seed %d and size %d" % (seed, len(lcg_sample)))
 
 ```
 
@@ -425,7 +481,31 @@ plt.show()
 
 ```
 
+I choose $10$ buckets for $\chi^2$ test now. Having $M=1024$ the mapped output should be quite dense.
 
+```{python test-for-lcg}
+import serial_test
+
+lcg_sample01 = lcg_sample/1024 ## map into [0,1] with /M
+partition  = np.linspace(0,1,11)[1:-1] ## s=10
+
+
+stat, pvalue = chi_test.chi_square_test(lcg_sample01, partition)
+result = stats.kstest(lcg_sample01, stats.uniform.cdf)
+p_ks, ks_stat = result.pvalue, result.statistic
+
+
+stat_serial, p_value_serial = serial_test.serial_test(lcg_sample01[:-1], m=3, l=2) # neeed to drop some elements to to have n=m*r
+
+```
+
+| Test name  |  $p_{value}$ | Statistic
+|---|---|---|
+| $\chi^2$  with $10$ buckets |`r py$pvalue`| `r py$stat`|
+| $KS-test$  |`r py$p_ks`| `r py$ks_stat`|
+| $Serial(3,2)$  |`r py$p_value_serial`| `r py$stat_serial`|
+
+Now the result are a bit more interesting. The $\chi^2$  with $10$ buckets did not reject null hypothesis, but KS did. That's why I run Serial(3,2) but it also reject. For me we is strong enough evidence that sequence is not random and we don't need 2nd level testing here. For me sequence look decent. 
 
 ## GLCG($2^{10},{3,7, 68}$)
 
@@ -435,7 +515,7 @@ a = np.array([3, 7, 68])
 seed = np.array([1,1,1])
 
 sample_glcg = get_n_glcg(2 ** 10, a, 0, seed, size = int(1e6))
-
+print("Generate GLCG sample with seed [%s] and size %d" % (', '.join(map(str, seed)), len(lcg_sample)))
 ```
 
 We can check how the sequence begin `r py$sample_glcg[0:50]`.
@@ -457,26 +537,52 @@ plt.legend(fontsize=12)
 plt.show()
 ```
 
+
+Same set of test as previous.
+
+
+```{python test-glcg}
+sample_glcg01 = sample_glcg/1024 ## map into [0,1] with /M
+partition  = np.linspace(0,1,11)[1:-1] ## s=10
+
+
+stat, pvalue = chi_test.chi_square_test(sample_glcg01, partition)
+result = stats.kstest(sample_glcg01, stats.uniform.cdf)
+p_ks, ks_stat = result.pvalue, result.statistic
+
+stat_serial, p_value_serial = serial_test.serial_test(sample_glcg01[:-1], m=3, l=3) # neeed to drop some elements to to have n=m*r
+```
+
+
+| Test name  |  $p_{value}$ | Statistic
+|---|---|---|
+| $\chi^2$  with $10$ buckets |`r py$pvalue`| `r py$stat`|
+| $KS-test$  |`r py$p_ks`| `r py$ks_stat`|
+| $Serial(3,3)$  |`r py$p_value_serial`| `r py$stat_serial`|
+
+A bit surprising, but all test reject null hypothesis. Lucky me, no need to perform 2nd level testing again. But to be honest I expect that GLCG pass at least one test. Probably is seed related. 
+
+
 ## Excell 
 
 
 ```{python excell}
 
 seed = 0.5
-sample_size = int(100)
+sample_size = int(1e6)
 excell_sample = generate_excell_sample(seed, sample_size)
 excell_sample2 = generate_excell_sample(2, sample_size)
-
 ```
 
 ```{python plot-trajectory}
 
-trajectory  = excell_sample
+trajectory  = excell_sample[:100]
+sample_size = len(trajectory)
 
 plt.clf()
 plt.figure(figsize=(10, 6))
 plt.plot(range(sample_size), trajectory, marker='o', linestyle='-', label='Sequence with seed=0.5', color = "red")
-plt.plot(range(sample_size), excell_sample2, marker='o', linestyle='-', label='Sequence with seed=2', color = "blue")
+plt.plot(range(sample_size), excell_sample2[0:100], marker='o', linestyle='-', label='Sequence with seed=2', color = "blue")
 plt.title(f'Trajectory of excell_gen PRNG', fontsize=14)
 plt.xlabel('Iteration', fontsize=12)
 plt.ylabel('Generated Value', fontsize=12)
@@ -488,17 +594,126 @@ plt.show()
 ```
 
 
-Plotting the trajectory of beginning give us overview of quality of such generator. Maybe it simple and fast but not safe. We can observe pattern easily for difference seeds. 
+Plotting the trajectory of beginning give us overview of quality of such generator. Maybe it simple and fast but not safe. We can observe pattern easily for difference seeds. I will consider sequence with seed  $42$.
 
 
 
-```{python serial-test}
-import serial_test
+```{python test-excell}
+partition  = np.linspace(0,1,11)[1:-1] ## s=10
 
-stat, p_value = serial_test.serial_test(serial_test.np.zeros(3*100), m=2, l=2)
+
+stat, pvalue = chi_test.chi_square_test(excell_sample , partition)
+result = stats.kstest(excell_sample , stats.uniform.cdf)
+p_ks, ks_stat = result.pvalue, result.statistic
+
+stat_serial, p_value_serial = serial_test.serial_test(excell_sample [:-1], m=3, l=3) # neeed to drop some elements to to have n=m*r
+```
+
+
+
+| Test name  |  $p_{value}$ | Statistic
+|---|---|---|
+| $\chi^2$  with $10$ buckets |`r py$pvalue`| `r py$stat`|
+| $KS-test$  |`r py$p_ks`| `r py$ks_stat`|
+| $Serial(3,3)$  |`r py$p_value_serial`| `r py$stat_serial`|
+
+All test reject hypothesis that excell output is truly random.
+
+
+## Mersenne Twister
+
+This one of the commonly used generator so I expect that one pass some test. Note how efficient&fast is numpy implementation (but implementation is out of this report scope :) ).
+
+```{python mersenne-test}
+
+mt19937 = np.random.MT19937(seed=42)
+rng = np.random.Generator(mt19937)
+start = time.time()
+mersenne_sample = rng.random(int(1e6))
+end = time.time()
+print("Elapsed generation time of sample size = %d is %ss" % (len(mersenne_sample), end - start))
+
+```
+```{python plot-path-for-mersenne}
+trajectory = mersenne_sample[0:100]
+sample_size = len(trajectory)
+
+plt.clf()
+plt.figure(figsize=(10, 6))
+plt.plot(range(sample_size), trajectory, marker='.', linestyle='--', linewidth = 0.5 ,label='Sequence with seed=42', color = "red")
+plt.title(f'Trajectory of MT19937 with seed = 42) ', fontsize=14)
+plt.xlabel('Iteration', fontsize=12)
+plt.ylabel('Generated Value', fontsize=12)
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.legend(fontsize=12)
+plt.show()
+```
+
+
+```{python test-mersenne}
+partition  = np.linspace(0,1,11)[1:-1] ## s=10
+
+
+stat, pvalue = chi_test.chi_square_test(mersenne_sample , partition)
+result = stats.kstest(mersenne_sample , stats.uniform.cdf)
+p_ks, ks_stat = result.pvalue, result.statistic
+
+stat_serial, p_value_serial = serial_test.serial_test(mersenne_sample [:-1], m=3, l=3) # neeed to drop some elements to to have n=m*r
+```
+
+
+| Test name  |  $p_{value}$ | Statistic
+|---|---|---|
+| $\chi^2$  with $10$ buckets |`r py$pvalue`| `r py$stat`|
+| $KS-test$  |`r py$p_ks`| `r py$ks_stat`|
+| $Serial(3,3)$  |`r py$p_value_serial`| `r py$stat_serial`|
+
+$\chi^2$ pass and KS (recall that we use $\alpha =0.01$ recommended by NIST). I don't know why **Serial** test is such restrictive. I expect that having $r=\frac{1000000-1}{3} = 333333$ from quite qood PRNG will be enough to pass the test since r >> granularity (which is $3^3=27$.) Don't know how to interpret such result. Anyway I did some manual testing and only few of default numpy generated sequence pass the serial test.
+
+I will perform second level for $\chi^2$  and KS. For both of them I will use $1000$ subsample (with $1000$ length each).
+
+
+```{python second-level-mersenne}
+
+mersenne_split = make_matrix_with_samples(mersenne_sample, n = 1000)
+test_function = lambda sample : (chi_test.chi_square_test(sample , np.linspace(0,1,11)[1:-1]))[1]
+test_funciton_ks = lambda sample:  (stats.kstest(sample , stats.uniform.cdf)).pvalue
+
+p_values_mersenne_split_chi = np.apply_along_axis(test_function, byRow, mersenne_split)
+p_values_mersenne_split_ks = np.apply_along_axis(test_funciton_ks, byRow, mersenne_split)
+
 
 ```
 
+
+
+```{python plots-for-2nd-level-mersenne}
+
+plt.clf()
+fig, axes = plt.subplots(1, 2, figsize=(14, 3), sharey=True)
+fig.suptitle("P value distribution for given test")
+dummy = axes[0].hist(p_values_mersenne_split_chi, bins=20)
+dummy = axes[0].set_title("$\chi^2$")
+dummy = axes[1].hist(p_values_mersenne_split_ks, bins=20)
+dummy = axes[1].set_title("$KS$")
+plt.tight_layout()
+plt.show()
+
+```
+
+
+Strange observation from plots. For chi test histogram doesn't look like the uniform one. But for KS we have the shape I expected. I will evaluate the chi test, but the result should be: 2nd level for chi fail, 2nd level for KS pass.
+
+
+```{python, 2nd-level-mersenne-chi}
+
+stat, pvalue = chi_test.chi_square_test(p_values_mersenne_split_chi , partition)
+stat_ks, pvalue_ks = chi_test.chi_square_test(p_values_mersenne_split_ks , partition)
+
+```
+
+
+The result as expected. KS pass 2nd level (not rejected) and $\chi^2$ fail. I expected that if KS does not reject $H_0$ then the chi test should give the same result. Apparently, I was wrong. I would assume that this generator produce random output.
 
 
 
